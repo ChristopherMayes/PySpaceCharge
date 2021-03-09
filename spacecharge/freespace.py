@@ -2,7 +2,7 @@ import scipy.constants
 from scipy.signal import fftconvolve, oaconvolve
 
 import numpy as np
-from numpy import sqrt, arctan, arctan2, log
+from numpy import sqrt, arctan ,arctanh, arctan2, log
 
 
 def lafun(x,y,z):
@@ -26,6 +26,7 @@ def xlafun(x, y, z):
     
     \int x/r^3 dx dy dz
     
+    = x*arctan((y*z)/(r*x)) -z*log(r+y) + y*log((r-z)/(r+z))/2
     
     Integrals for Ey, Ez can be evaluated by calling:
         Ey: xlafun(y, z, x)   
@@ -37,12 +38,13 @@ def xlafun(x, y, z):
     r=np.sqrt(x**2+y**2+z**2)
 
     #return x*arctan2(z, x)+x*arctan2(y*z, (x*r)) - z*log(y+r) - y*log(z+r) # Don't use because of branch cut
-    return x *(arctan(z/x) + arctan(y*z/(x*r))) - z*log(y+r) - y*log(z+r)
 
-    # ylafun is the same with y, z, x arguments
-    #res= y*arctan2(x/y)+y*arctan2(z*x/(y*r))-x*log(z+r)-z*log(x+r)
+    #Form 0 (original)
+    #return x *(arctan(z/x) + arctan(y*z/(x*r))) - z*log(y+r) - y*log(z+r)
+
+    # Form 4 (Slightly faster)
+    return x*arctan((y*z)/(r*x)) -z*log(r+y) + y*log((r-z)/(r+z))/2
     
-
 def offset_symmetric_vec(n, delta):
     return np.arange(-n,n,1)*delta + delta/2
 
@@ -73,6 +75,8 @@ def igf_mesh3(rho_shape, deltas, gamma=1, component=None):
     
     GF : np.array
         Green function array of shape (2*rho_shape -1)
+        
+        The origin will be at index rho_shape -1, and should be zero by symmetry for x, y, z components
         
     
     """
