@@ -46,7 +46,7 @@ def xlafun(x, y, z):
     return x*arctan((y*z)/(r*x)) -z*log(r+y) + y*log((r-z)/(r+z))/2
     
 def offset_symmetric_vec(n, delta):
-    return np.arange(-n,n,1)*delta + delta/2
+    return np.arange(-n,n+1,1)*delta + delta/2
 
 def igf_mesh3(rho_shape, deltas, gamma=1, component=None):
     """
