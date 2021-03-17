@@ -44,14 +44,14 @@ def xlafun(x, y, z):
 
     # Form 4 (Slightly faster)
     return x*arctan((y*z)/(r*x)) -z*log(r+y) + y*log((r-z)/(r+z))/2
-    
+        
 def offset_symmetric_vec(n, delta):
     return np.arange(-n,n+1,1)*delta + delta/2
 
-def igf_mesh3(rho_shape, deltas, gamma=1, component=None):
+def igf_mesh3(rho_shape, deltas, gamma=1, offset=(0,0,0), component=None):
     """
-    Returns the integrated Green function mesh appropriate to be convolved with a 
-    charge mesh of shape rho_shape
+    Returns the integrated Green function (IGF) mesh appropriate to be convolved with a 
+    charge mesh of shape rho_shape.
     
     Parameters
     ----------
@@ -64,6 +64,10 @@ def igf_mesh3(rho_shape, deltas, gamma=1, component=None):
     gamma : float
         relativistic gamma
         
+    offset : tuple(float, float, float)
+        Offset coordinates for the center of the grid in [m]. Default: (0,0,0)
+        For example, an offset of (0,0,10) can be used to compute the field at z=+10 m relative to the rho_mesh center. 
+        
     component:
         'coulomb'
         'x'
@@ -74,23 +78,21 @@ def igf_mesh3(rho_shape, deltas, gamma=1, component=None):
     -------
     
     GF : np.array
-        Green function array of shape (2*rho_shape -1)
+        Green function array of shape (2*rho_shape)
         
-        The origin will be at index rho_shape -1, and should be zero by symmetry for x, y, z components
+        The origin will be at index rho_shape-1, and should be zero by symmetry for x, y, z components
         
     
     """
     
     dx, dy, dz = tuple(deltas) # Convenience
     
-    # Make an offset grid
-    D = [dx, dy, dz]
-    # Get the correct relativistic scaling
-    if component == 'z':
-        D[2]*=gamma 
+    # Boost to the rest frame
+    D = [dx, dy, dz*gamma]
+    offset = offset[0], offset[1], offset[2]*gamma # Note that this is an overall offset
     
-    vecs = [offset_symmetric_vec(n, delta) for n, delta in zip(rho_shape, D)] 
-
+    # Make an offset grid
+    vecs = [offset_symmetric_vec(n, delta)+o for n, delta, o in zip(rho_shape, D, offset)] 
     meshes = np.meshgrid(*vecs, indexing='ij')
     
     if component == 'coulomb':
@@ -110,7 +112,7 @@ def igf_mesh3(rho_shape, deltas, gamma=1, component=None):
     # Evaluate the indefinite integral over the cube 
     #       (x2,y2,z2) -    (x1,y2,z2) -    (x2,y1,z2) -    (x2,y2,z1) -    (x1,y1,z1)   +    (x1,y1,z2)   +    (x1,y2,z1)  +    (x2,y1,z1)
     res = GG[1:,1:,1:] - GG[:-1,1:,1:] - GG[1:,:-1,1:] - GG[1:,1:,:-1] - GG[:-1,:-1,:-1] + GG[:-1,:-1,1:] + GG[:-1,1:,:-1]  + GG[1:,:-1,:-1]
-
+    
     if component in ['z', 'coulomb']:
         factor = 1/(dx*dy*dz*gamma)
     else:
@@ -120,10 +122,10 @@ def igf_mesh3(rho_shape, deltas, gamma=1, component=None):
 
 
 
-def spacecharge_mesh(rho_mesh, deltas, gamma=1, component=None):
+def spacecharge_mesh(rho_mesh, deltas, gamma=1, offset=(0,0,0), component=None):
     
     # Green gunction
-    green_mesh = igf_mesh3(rho_mesh.shape, deltas, gamma=gamma, component=component)
+    green_mesh = igf_mesh3(rho_mesh.shape, deltas, gamma=gamma, offset=offset, component=component)
     
     # Convolution
     field_mesh = fftconvolve(rho_mesh, green_mesh, mode='same')

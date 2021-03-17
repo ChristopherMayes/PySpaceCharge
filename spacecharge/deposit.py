@@ -34,8 +34,8 @@ def deposit_particles(xyz, weights=None, bins=(32,32,32), range=None):
     
     # Get deltas
     deltas = np.array([np.mean(np.diff(e)) for e in edges])
-
-    coord_vecs = np.array([np.linspace(e.min(), e.max(), bins[i]) for i, e in enumerate(edges)])
+    mins = [e.min()+deltas[i]/2 for i, e in enumerate(edges)]
     
-    #return dict(rho_mesh=rho_mesh, deltas=deltas, coord_vecs=coord_vecs)
+    coord_vecs = [np.arange(0,n,1)*d+m for n, d, m in zip(rho_mesh.shape, deltas, mins)]
+    
     return rho_mesh, deltas, coord_vecs
