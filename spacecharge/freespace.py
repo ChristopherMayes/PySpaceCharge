@@ -1,5 +1,6 @@
 import scipy.constants
 from scipy.signal import fftconvolve, oaconvolve
+import scipy.fft as sp_fft
 
 import numpy as np
 from numpy import sqrt, arctan ,arctanh, arctan2, log
@@ -69,10 +70,10 @@ def igf_mesh3(rho_shape, deltas, gamma=1, offset=(0,0,0), component=None):
         For example, an offset of (0,0,10) can be used to compute the field at z=+10 m relative to the rho_mesh center. 
         
     component:
-        'coulomb'
-        'x'
-        'y'
-        'z'
+        'phi'
+        'Ex'
+        'Ey'
+        'Ez'
         
     Returns
     -------
@@ -88,20 +89,20 @@ def igf_mesh3(rho_shape, deltas, gamma=1, offset=(0,0,0), component=None):
     dx, dy, dz = tuple(deltas) # Convenience
     
     # Boost to the rest frame
-    D = [dx, dy, dz*gamma]
+    dz = dz*gamma 
     offset = offset[0], offset[1], offset[2]*gamma # Note that this is an overall offset
     
     # Make an offset grid
-    vecs = [offset_symmetric_vec(n, delta)+o for n, delta, o in zip(rho_shape, D, offset)] 
+    vecs = [offset_symmetric_vec(n, delta)+o for n, delta, o in zip(rho_shape, [dx,dy,dz], offset)] 
     meshes = np.meshgrid(*vecs, indexing='ij')
     
-    if component == 'coulomb':
+    if component == 'phi':
         func = lafun 
-    elif component == 'x':
+    elif component == 'Ex':
         func = lambda x, y, z: xlafun(x, y, z)
-    elif component == 'y':
+    elif component == 'Ey':
         func = lambda x, y, z: xlafun(y, z, x)    
-    elif component == 'z':
+    elif component == 'Ez':
         func = lambda x, y, z: xlafun(z, x, y)      
     else:
         raise ValueError(f'Invalid component: {component}')    
@@ -113,8 +114,9 @@ def igf_mesh3(rho_shape, deltas, gamma=1, offset=(0,0,0), component=None):
     #       (x2,y2,z2) -    (x1,y2,z2) -    (x2,y1,z2) -    (x2,y2,z1) -    (x1,y1,z1)   +    (x1,y1,z2)   +    (x1,y2,z1)  +    (x2,y1,z1)
     res = GG[1:,1:,1:] - GG[:-1,1:,1:] - GG[1:,:-1,1:] - GG[1:,1:,:-1] - GG[:-1,:-1,:-1] + GG[:-1,:-1,1:] + GG[:-1,1:,:-1]  + GG[1:,:-1,:-1]
     
-    if component in ['z', 'coulomb']:
-        factor = 1/(dx*dy*dz*gamma)
+    # Boost back to the lab frame. Tranverse fields are enhanced by gamma
+    if component in ['Ex', 'Ey']:
+        factor = gamma/(dx*dy*dz)
     else:
         factor = 1/(dx*dy*dz)    
     
@@ -134,3 +136,36 @@ def spacecharge_mesh(rho_mesh, deltas, gamma=1, offset=(0,0,0), component=None):
     factor = 1/(4*np.pi*scipy.constants.epsilon_0)
     
     return factor*field_mesh
+
+
+
+def spacecharge_meshes(rho_mesh, deltas, gamma=1, offset=(0,0,0), components=['Ex', 'Ey', 'Ez']):
+    """
+    Computes several components at once using an explicit FFT convolution.
+    
+    This is the preferred routine.
+    
+    """
+    
+    # Make double sized array
+    nx, ny, nz = rho_mesh.shape
+    crho = np.zeros( (2*nx, 2*ny, 2*nz))
+    crho[0:nx,0:ny,0:nz] = rho_mesh[0:nx,0:ny,0:nz]
+    # FFT
+    crho = sp_fft.fftn(crho)
+    
+    # Factor to convert to V/m
+    factor = 1/(4*np.pi*scipy.constants.epsilon_0)
+    
+    field = {'deltas':deltas}
+    for component in components:
+        # Green gunction
+        green_mesh = igf_mesh3(rho_mesh.shape, deltas, gamma=gamma, offset=offset, component=component)
+
+        # Convolution of double-sized arrays
+        field_mesh = sp_fft.ifftn(crho*sp_fft.fftn(green_mesh))
+        # The result is in a shifted location in the output array
+        field[component] = factor*np.real(field_mesh[nx-1:2*nx-1,ny-1:2*ny-1,nx-1:2*nz-1])
+        
+    return field
+
