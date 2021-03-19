@@ -147,23 +147,27 @@ def spacecharge_meshes(rho_mesh, deltas, gamma=1, offset=(0,0,0), components=['E
     
     """
     
+    # FFT Configuration
+    fft  = lambda x: sp_fft.fftn(x,  overwrite_x=True)
+    ifft = lambda x: sp_fft.ifftn(x, overwrite_x=True)
+    
     # Make double sized array
     nx, ny, nz = rho_mesh.shape
     crho = np.zeros( (2*nx, 2*ny, 2*nz))
     crho[0:nx,0:ny,0:nz] = rho_mesh[0:nx,0:ny,0:nz]
     # FFT
-    crho = sp_fft.fftn(crho)
+    crho = fft(crho)
     
     # Factor to convert to V/m
     factor = 1/(4*np.pi*scipy.constants.epsilon_0)
-    
+ 
     field = {'deltas':deltas}
     for component in components:
         # Green gunction
         green_mesh = igf_mesh3(rho_mesh.shape, deltas, gamma=gamma, offset=offset, component=component)
 
         # Convolution of double-sized arrays
-        field_mesh = sp_fft.ifftn(crho*sp_fft.fftn(green_mesh))
+        field_mesh = ifft(crho*fft(green_mesh))
         # The result is in a shifted location in the output array
         field[component] = factor*np.real(field_mesh[nx-1:2*nx-1,ny-1:2*ny-1,nx-1:2*nz-1])
         
